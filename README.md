@@ -1,18 +1,22 @@
 # AI Codebase Reviewer
 
-An AI-powered codebase review system that analyzes uploaded project archives (.zip) using tree-sitter for parsing and Groq (Llama) for generating structured feedback on code quality. The application provides detailed insights on bugs, security issues, performance, and general suggestions.
+An AI-powered codebase review system that analyzes uploaded project archives (.zip) using tree-sitter for parsing and Groq (Llama) for generating structured feedback. The system uses an asynchronous architecture with Celery and Redis to handle large projects efficiently.
 
 ## Features
 
+- **Asynchronous Processing**: Non-blocking API that handles project analysis in the background via Celery.
 - **Project Uploads**: Accepts `.zip` archives containing project source code.
 - **Multi-language Support**: Parses Python, JavaScript, TypeScript, Java, C, and C++ files using `tree-sitter`.
-- **Intelligent Chunking**: Intelligently chunks code by parsing functions and classes to stay within LLM context limits.
-- **AI-Powered Analysis**: Utilizes Groq (Llama models) to identify bugs, security vulnerabilities, performance bottlenecks, and structural warnings.
-- **Structured Feedback**: Returns granular JSON feedback aggregated per file.
+- **Intelligent Chunking**: Chunks code by parsing functions and classes to stay within LLM context limits.
+- **Intelligent Caching**: Uses Redis to cache analysis results for code chunks (SHA-256), preventing redundant LLM calls.
+- **Job Tracking**: Persistent job status and results stored in SQLite (or PostgreSQL).
+- **AI-Powered Analysis**: Utilizes Groq (Llama 3.1) to identify bugs, security vulnerabilities, performance bottlenecks, and structural warnings.
 
 ## Tech Stack
 
 - **Backend**: FastAPI, Python 3.12+
+- **Task Queue**: Celery + Redis
+- **Database**: SQLAlchemy (SQLite default)
 - **Parsing**: `tree-sitter`
 - **AI Integration**: `groq` Python SDK
 - **Dependency Management**: Poetry
@@ -20,7 +24,8 @@ An AI-powered codebase review system that analyzes uploaded project archives (.z
 ## Prerequisites
 
 - Python 3.12 or higher
-- [Poetry](https://python-poetry.org/) installed
+- [Poetry](https://python-poetry.org/)
+- **Redis** (for Celery and Caching)
 - Groq API Key
 
 ## Installation
@@ -31,44 +36,43 @@ An AI-powered codebase review system that analyzes uploaded project archives (.z
    cd AIReviewBot
    ```
 
-2. Install dependencies using Poetry:
+2. Install dependencies:
    ```bash
    poetry install
    ```
 
-3. Set up environment variables:
-   Create a `.env` file in the root directory and add the following:
+3. Set up environment variables (`.env`):
    ```env
    GROQ_API_KEY=your_groq_api_key_here
-   MODEL_NAME=llama-3.1-8b-instant
-   MAX_RETRIES=3
-   RETRY_DELAY=2
+   REDIS_URL=redis://localhost:6379/0
+   DATABASE_URL=sqlite:///./storage/aireviewbot.db
    ```
 
 ## Usage
 
-1. Start the FastAPI backend server:
-   ```bash
-   poetry run python ./backend/app/main.py
-   ```
-   By default, it will run on `http://127.0.0.1:8000`.
+You need to run two processes:
 
-2. Test the API:
-   Send a `POST` request to `/analyze` endpoint with a `.zip` file of your project:
+1. **Start the API Server**:
    ```bash
-   curl -X POST "http://127.0.0.1:8000/analyze" \
-     -H "accept: application/json" \
-     -H "Content-Type: multipart/form-data" \
-     -F "file=@tests/sample_project.zip"
+   poetry run python -m backend.app.main
    ```
 
-3. **API Documentation**:
-   Visit `http://127.0.0.1:8000/docs` to view the interactive Swagger API documentation.
+2. **Start the Celery Worker**:
+   ```bash
+   # Windows
+   poetry run celery -A backend.app.workers.celery_app.celery_app worker --loglevel=info --pool=solo
 
-## Project Structure
+   # Linux/Mac
+   poetry run celery -A backend.app.workers.celery_app.celery_app worker --loglevel=info
+   ```
 
-- `backend/app/main.py`: Application entry point.
-- `backend/app/routes/`: FastAPI controllers (e.g., `analyzer_controller.py`).
-- `backend/app/services/`: Core business logic (`parser_service`, `chunking_service`, `analyzer_service`).
-- `backend/app/models/`: Pydantic schemas for data validation.
-- `backend/app/utils/`: Utility functions for file extraction and handling.
+## API Reference
+
+- `POST /api/v1/analyze`: Submit a ZIP file for analysis (returns `job_id`).
+- `GET /api/v1/status/{job_id}`: Check analysis progress.
+- `GET /api/v1/result/{job_id}`: Fetch the final analysis report.
+- `GET /api/v1/jobs`: List recent analysis jobs.
+
+## Documentation
+
+For a detailed walkthrough of the architecture and setup, see [walkthrough.md](./walkthrough.md).

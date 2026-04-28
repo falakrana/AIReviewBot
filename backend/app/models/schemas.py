@@ -40,3 +40,33 @@ class AnalysisResponse(BaseModel):
     session_id: str
     status: str
     results: List[FileAnalysisResult]
+
+# ---------------------------------------------------------------------------
+# Phase 3 — Job tracking schemas
+# ---------------------------------------------------------------------------
+
+class JobSubmitResponse(BaseModel):
+    """Returned immediately by POST /analyze."""
+    job_id:  str
+    status:  str = "pending"
+    message: str
+    tracking: Dict[str, str]
+
+class JobStatusResponse(BaseModel):
+    """Returned by GET /status/{job_id}."""
+    job_id:           str
+    status:           str
+    progress:         float
+    message:          Optional[str] = None
+    filename:         Optional[str] = None
+    total_chunks:     int = 0
+    processed_chunks: int = 0
+    created_at:       Optional[str] = None
+    updated_at:       Optional[str] = None
+    completed_at:     Optional[str] = None
+
+class JobListResponse(BaseModel):
+    """Returned by GET /jobs."""
+    count: int
+    jobs:  List[Dict[str, Any]]
+
